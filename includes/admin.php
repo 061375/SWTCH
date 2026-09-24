@@ -235,14 +235,23 @@ function swtch_render_admin_page() {
     $deployment_username    = swtch_get_deployment_username();
     $deployment_remote_path = swtch_get_deployment_remote_path();
     ?>
-
+    <style>
+        .update-nag {display: none;}
+        .accbutton {
+            font-size: 2em;
+            background: #d9d9d9;
+            padding: 14px 5px 14px;
+            border: solid 1px;
+            cursor: pointer;
+        }
+    </style>
     <div class="wrap">
 
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
             <img
                 src="<?php echo esc_url( plugin_dir_url( SWTCH_PLUGIN_FILE ) . 'swtch-logo.png' ); ?>"
                 alt="SWTCH"
-                style="width:100px;height:100px;object-fit:contain;border-top-left-radius:35px;border-top-right-radius:35px;box-shadow:-2px -3px 2px 0 #000;"
+                style="margin: 15px 0 0 0;width:150px;height:150px;object-fit:contain;border-top-left-radius:35px;border-top-right-radius:35px;box-shadow:-2px -3px 2px 0 #000;"
             >
         </div>
 
@@ -255,140 +264,142 @@ function swtch_render_admin_page() {
         <?php endif; ?>
 
         <hr>
+    <article>
+        <div class="accbutton">Settings</div>
+        <section class="hidden">
+            <form method="post">
+                <?php wp_nonce_field( 'swtch_save_settings', 'swtch_settings_nonce' ); ?>
 
-        <h2>Settings</h2>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <label for="swtch_live_site_url">Live Site URL</label>
+                        </th>
+                        <td>
+                            <input
+                                type="url"
+                                id="swtch_live_site_url"
+                                name="swtch_live_site_url"
+                                value="<?php echo esc_attr( $live_site_url ); ?>"
+                                class="regular-text"
+                                placeholder="https://example.com"
+                            >
+                            <p class="description">
+                                The public URL where the exported static site will be hosted.
+                            </p>
+                        </td>
+                    </tr>
+                    <tr><th scope="row"><label for="swtch_deployment_protocol">Deployment Protocol</label></th><td><select id="swtch_deployment_protocol" name="swtch_deployment_protocol"><option value="ftp" <?php selected( $deployment_protocol, 'ftp' ); ?>>FTP</option><option value="sftp" <?php selected( $deployment_protocol, 'sftp' ); ?>>SFTP (SSH)</option></select><p class="description">FTP normally uses port 21. SFTP normally uses port 22.</p></td></tr>
+                    <tr><th scope="row"><label for="swtch_deployment_host">Host</label></th><td><input type="text" id="swtch_deployment_host" name="swtch_deployment_host" value="<?php echo esc_attr( $deployment_host ); ?>" class="regular-text" placeholder="ftp.example.com"></td></tr>
+                    <tr><th scope="row"><label for="swtch_deployment_port">Port</label></th><td><input type="number" id="swtch_deployment_port" name="swtch_deployment_port" value="<?php echo esc_attr( $deployment_port ); ?>" class="small-text" min="1" max="65535"></td></tr>
+                    <tr><th scope="row"><label for="swtch_deployment_username">Username</label></th><td><input type="text" id="swtch_deployment_username" name="swtch_deployment_username" value="<?php echo esc_attr( $deployment_username ); ?>" class="regular-text" autocomplete="username"></td></tr>
+                    <tr><th scope="row"><label for="swtch_deployment_remote_path">Remote Path</label></th><td><input type="text" id="swtch_deployment_remote_path" name="swtch_deployment_remote_path" value="<?php echo esc_attr( $deployment_remote_path ); ?>" class="regular-text" placeholder="/public_html/"><p class="description">Directory where the static site will be uploaded.</p></td></tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="swtch_remote_ignore_paths">Remote Ignore Paths</label>
+                        </th>
+                        <td>
+                            <textarea
+                                id="swtch_remote_ignore_paths"
+                                name="swtch_remote_ignore_paths"
+                                rows="8"
+                                class="large-text code"
+                                placeholder="robots.txt&#10;custom/&#10;downloads/private/&#10;*.log"
+                            ><?php echo esc_textarea( swtch_get_remote_ignore_rules_text() ); ?></textarea>
 
-        <form method="post">
-            <?php wp_nonce_field( 'swtch_save_settings', 'swtch_settings_nonce' ); ?>
+                            <p class="description">
+                                One path or wildcard per line. Blank lines and lines beginning with # are ignored.
+                                Directory rules ending in / apply recursively. SWTCH always protects
+                                <code>.htaccess</code> and <code>.well-known/</code>.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
 
-            <table class="form-table">
-                <tr>
-                    <th scope="row">
-                        <label for="swtch_live_site_url">Live Site URL</label>
-                    </th>
-                    <td>
-                        <input
-                            type="url"
-                            id="swtch_live_site_url"
-                            name="swtch_live_site_url"
-                            value="<?php echo esc_attr( $live_site_url ); ?>"
-                            class="regular-text"
-                            placeholder="https://example.com"
-                        >
-                        <p class="description">
-                            The public URL where the exported static site will be hosted.
-                        </p>
-                    </td>
-                </tr>
-                <tr><th scope="row"><label for="swtch_deployment_protocol">Deployment Protocol</label></th><td><select id="swtch_deployment_protocol" name="swtch_deployment_protocol"><option value="ftp" <?php selected( $deployment_protocol, 'ftp' ); ?>>FTP</option><option value="sftp" <?php selected( $deployment_protocol, 'sftp' ); ?>>SFTP (SSH)</option></select><p class="description">FTP normally uses port 21. SFTP normally uses port 22.</p></td></tr>
-                <tr><th scope="row"><label for="swtch_deployment_host">Host</label></th><td><input type="text" id="swtch_deployment_host" name="swtch_deployment_host" value="<?php echo esc_attr( $deployment_host ); ?>" class="regular-text" placeholder="ftp.example.com"></td></tr>
-                <tr><th scope="row"><label for="swtch_deployment_port">Port</label></th><td><input type="number" id="swtch_deployment_port" name="swtch_deployment_port" value="<?php echo esc_attr( $deployment_port ); ?>" class="small-text" min="1" max="65535"></td></tr>
-                <tr><th scope="row"><label for="swtch_deployment_username">Username</label></th><td><input type="text" id="swtch_deployment_username" name="swtch_deployment_username" value="<?php echo esc_attr( $deployment_username ); ?>" class="regular-text" autocomplete="username"></td></tr>
-                <tr><th scope="row"><label for="swtch_deployment_remote_path">Remote Path</label></th><td><input type="text" id="swtch_deployment_remote_path" name="swtch_deployment_remote_path" value="<?php echo esc_attr( $deployment_remote_path ); ?>" class="regular-text" placeholder="/public_html/"><p class="description">Directory where the static site will be uploaded.</p></td></tr>
-                <tr>
-                    <th scope="row">
-                        <label for="swtch_remote_ignore_paths">Remote Ignore Paths</label>
-                    </th>
-                    <td>
-                        <textarea
-                            id="swtch_remote_ignore_paths"
-                            name="swtch_remote_ignore_paths"
-                            rows="8"
-                            class="large-text code"
-                            placeholder="robots.txt&#10;custom/&#10;downloads/private/&#10;*.log"
-                        ><?php echo esc_textarea( swtch_get_remote_ignore_rules_text() ); ?></textarea>
+                <?php submit_button( 'Save Settings', 'secondary', 'swtch_save_settings' ); ?>
+            </form>
+        </section>
+    </article>
+    <article>
+        <div class="accbutton">Build Site</div>
+        <section class="hidden">
+            <p>
+                SWTCH first creates a page manifest, then generates one page per AJAX request.
+            </p>
 
-                        <p class="description">
-                            One path or wildcard per line. Blank lines and lines beginning with # are ignored.
-                            Directory rules ending in / apply recursively. SWTCH always protects
-                            <code>.htaccess</code> and <code>.well-known/</code>.
-                        </p>
-                    </td>
-                </tr>
-            </table>
+            <p>
+                <button type="button" id="swtch-build" class="button button-primary">
+                    Build Static Site
+                </button>
+            </p>
 
-            <?php submit_button( 'Save Settings', 'secondary', 'swtch_save_settings' ); ?>
-        </form>
+            <div style="max-width:760px;margin:14px 0 24px;">
+                <strong>Build progress</strong><br>
+                <progress id="swtch-build-progress" value="0" max="100" style="width:100%;height:22px;"></progress>
+                <div id="swtch-build-progress-label">0 / 0 (0%)</div>
+            </div>
 
-        <hr>
+            <h3>Test Deployment Connection</h3>
+            <p>Save the deployment settings above first, then enter the password to test the connection. The password is not saved.</p>
+            <form method="post">
+                <?php wp_nonce_field( 'swtch_test_connection', 'swtch_test_connection_nonce' ); ?>
+                <table class="form-table"><tr><th scope="row"><label for="swtch_deployment_password">Password</label></th><td><input type="password" id="swtch_deployment_password" name="swtch_deployment_password" class="regular-text" autocomplete="current-password"></td></tr></table>
+                <?php submit_button( 'Test Connection', 'secondary', 'swtch_test_connection' ); ?>
+            </form>
 
-        <h2>Build Static Site</h2>
-        <p>
-            SWTCH first creates a page manifest, then generates one page per AJAX request.
-        </p>
+            <hr>
 
-        <p>
-            <button type="button" id="swtch-build" class="button button-primary">
-                Build Static Site
-            </button>
-        </p>
+            <h2>Deploy Static Site</h2>
+            <p>
+                After a successful build, SWTCH scans the export directory and creates a deployment manifest.
+                Remote ignore rules are applied before files are queued for upload.
+            </p>
 
-        <div style="max-width:760px;margin:14px 0 24px;">
-            <strong>Build progress</strong><br>
-            <progress id="swtch-build-progress" value="0" max="100" style="width:100%;height:22px;"></progress>
-            <div id="swtch-build-progress-label">0 / 0 (0%)</div>
-        </div>
-
-        <h3>Test Deployment Connection</h3>
-        <p>Save the deployment settings above first, then enter the password to test the connection. The password is not saved.</p>
-        <form method="post">
-            <?php wp_nonce_field( 'swtch_test_connection', 'swtch_test_connection_nonce' ); ?>
-            <table class="form-table"><tr><th scope="row"><label for="swtch_deployment_password">Password</label></th><td><input type="password" id="swtch_deployment_password" name="swtch_deployment_password" class="regular-text" autocomplete="current-password"></td></tr></table>
-            <?php submit_button( 'Test Connection', 'secondary', 'swtch_test_connection' ); ?>
-        </form>
-
-        <hr>
-
-        <h2>Deploy Static Site</h2>
-        <p>
-            After a successful build, SWTCH scans the export directory and creates a deployment manifest.
-            Remote ignore rules are applied before files are queued for upload.
-        </p>
-
-        <p>
-            <table class="form-table">
-                <tr>
-                    <th scope="row">
-                        <label for="swtch-deployment-password">
-                            Password
-                        </label>
-                    </th>
-                    <td>
-                        <input
-                            type="password"
-                            id="swtch-deployment-password"
-                            autocomplete="current-password"
-                            class="regular-text"
-                        >
-                    </td>
-                </tr>
-            </table>
+            <p>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <label for="swtch-deployment-password">
+                                Password
+                            </label>
+                        </th>
+                        <td>
+                            <input
+                                type="password"
+                                id="swtch-deployment-password"
+                                autocomplete="current-password"
+                                class="regular-text"
+                            >
+                        </td>
+                    </tr>
+                </table>
+                    
+                <button type="button" id="swtch-deploy" class="button button-secondary" disabled>
+                    Deploy Static Site
+                </button>
                 
-            <button type="button" id="swtch-deploy" class="button button-secondary" disabled>
-                Deploy Static Site
-            </button>
-            
-        </p>
+            </p>
 
-        <div style="max-width:760px;margin:14px 0 24px;">
-            <strong>Deployment progress</strong><br>
-            <progress id="swtch-deploy-progress" value="0" max="100" style="width:100%;height:22px;"></progress>
-            <div id="swtch-deploy-progress-label">0 / 0 (0%)</div>
-        </div>
+            <div style="max-width:760px;margin:14px 0 24px;">
+                <strong>Deployment progress</strong><br>
+                <progress id="swtch-deploy-progress" value="0" max="100" style="width:100%;height:22px;"></progress>
+                <div id="swtch-deploy-progress-label">0 / 0 (0%)</div>
+            </div>
 
-        <h2>Activity</h2>
-        <div
-            id="swtch-log"
-            class="code"
-            style="max-width:1000px;height:300px;overflow:auto;background:#fff;border:1px solid #c3c4c7;padding:12px;white-space:pre-wrap;"
-        ></div>
+            <h2>Activity</h2>
+            <div
+                id="swtch-log"
+                class="code"
+                style="max-width:1000px;height:300px;overflow:auto;background:#fff;border:1px solid #c3c4c7;padding:12px;white-space:pre-wrap;"
+            ></div>
 
-        <style>
-            .swtch-log-success { color: #008a20; }
-            .swtch-log-error { color: #b32d2e; }
-            .swtch-log-info { color: #50575e; }
-        </style>
-
+            <style>
+                .swtch-log-success { color: #008a20; }
+                .swtch-log-error { color: #b32d2e; }
+                .swtch-log-info { color: #50575e; }
+            </style>
+        </section>
+    </article>
     </div>
 
     <?php

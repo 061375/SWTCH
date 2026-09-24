@@ -167,5 +167,25 @@
                 }
             });
         }
+
+        document.getElementById('wpwrap').addEventListener('click', function (event) {
+            const button = event.target.closest('.accbutton');
+
+            if (!button) {
+                return;
+            }
+
+            const article = button.closest('article');
+
+            if (!article) {
+                return;
+            }
+
+            const section = article.querySelector('section');
+
+            if (section) {
+                section.classList.toggle('hidden');
+            }
+        });
     });
 })();

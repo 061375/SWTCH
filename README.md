@@ -11,8 +11,10 @@
 
 ## 📅 September 22, 2026
 ## ⬆️📅 September 24, 2026
-## 0.1.2
+## 0.1.3
 
+* ## 0.1.2/1
+*   🐱 Add accordion sections to admin
 * ## 0.1.1/2
 *   🐞 Homepage link was empty instead of /
 * ## 0.1.1/1
