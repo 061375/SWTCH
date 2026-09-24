@@ -133,7 +133,11 @@ function swtch_ajax_build_page() {
 add_action( 'wp_ajax_swtch_build_page', 'swtch_ajax_build_page' );
 
 /**
- * Finalize a build: create sitemap.xml and construct the deployment manifest.
+ * Finalize a build:
+ * - create sitemap.xml
+ * - construct the deployment manifest
+ * - compare it against the previous successful deployment
+ * - determine stale remote files
  */
 function swtch_ajax_finalize_build() {
 
@@ -146,9 +150,17 @@ function swtch_ajax_finalize_build() {
     $job = swtch_get_job( $job_id );
 
     if ( false === $job ) {
-        wp_send_json_error( [ 'message' => 'Build job not found or expired.' ], 404 );
+        wp_send_json_error(
+            [
+                'message' => 'Build job not found or expired.',
+            ],
+            404
+        );
     }
 
+    /*
+     * Find any pages that failed during generation.
+     */
     $failed = array_filter(
         $job['page_results'],
         static function ( $result ) {
@@ -156,22 +168,92 @@ function swtch_ajax_finalize_build() {
         }
     );
 
-    $sitemap_result = swtch_export_wordpress_sitemap( $job['urls'] );
-    $manifest       = swtch_build_deployment_manifest();
+    /*
+     * Generate sitemap.xml.
+     */
+    $sitemap_result =
+        swtch_export_wordpress_sitemap(
+            $job['urls']
+        );
 
+    /*
+     * Build the current deployment manifest.
+     *
+     * Each item should now contain:
+     *
+     * relative_path
+     * absolute_path
+     * size
+     * hash
+     */
+    $manifest =
+        swtch_build_deployment_manifest();
+
+    /*
+     * Get the manifest from the last successful deployment.
+     */
+    $previous_manifest =
+        swtch_get_last_deployment_manifest();
+
+    /*
+     * Mark each current file as changed or unchanged.
+     */
+    foreach ( $manifest as &$item ) {
+
+        $item['changed'] =
+            swtch_deployment_file_changed(
+                $item,
+                $previous_manifest
+            );
+    }
+
+    unset( $item );
+
+    /*
+     * Find files that SWTCH previously deployed
+     * but which no longer exist in this build.
+     */
+    $stale_files =
+        swtch_get_stale_deployment_files(
+            $manifest,
+            $previous_manifest
+        );
+
+    /*
+     * Save everything into the temporary build job.
+     *
+     * Do NOT update the permanent deployment manifest yet.
+     * That happens only after deployment completes successfully.
+     */
     $job['deployment_manifest'] = $manifest;
-    $job['sitemap_result']       = $sitemap_result;
-    swtch_save_job( $job_id, $job );
+    $job['stale_files']         = $stale_files;
+    $job['sitemap_result']      = $sitemap_result;
 
+    swtch_save_job(
+        $job_id,
+        $job
+    );
+
+    /*
+     * Return deployment information to admin.js.
+     */
     wp_send_json_success( [
         'pages_total'      => count( $job['urls'] ),
         'pages_failed'     => count( $failed ),
         'sitemap_created'  => false !== $sitemap_result,
+
         'deployment_total' => count( $manifest ),
         'manifest'         => $manifest,
+
+        'stale_total'      => count( $stale_files ),
+        'stale_files'      => $stale_files,
     ] );
 }
-add_action( 'wp_ajax_swtch_finalize_build', 'swtch_ajax_finalize_build' );
+
+add_action(
+    'wp_ajax_swtch_finalize_build',
+    'swtch_ajax_finalize_build'
+);
 
 /**
  * Upload exactly one file from the deployment manifest.
@@ -206,6 +288,19 @@ function swtch_ajax_deploy_file() {
     }
 
     $item = $job['deployment_manifest'][ $index ];
+
+    if (
+        isset( $item['changed'] ) &&
+        false === $item['changed']
+    ) {
+
+        wp_send_json_success( [
+            'index'   => $index,
+            'skipped' => true,
+            'file'    => $item['relative_path'],
+            'message' => 'Unchanged.',
+        ] );
+    }
 
     // Defense in depth: enforce ignore rules again at upload time.
     if ( swtch_is_remote_path_ignored( $item['relative_path'] ) ) {
@@ -245,3 +340,135 @@ function swtch_ajax_deploy_file() {
     ] );
 }
 add_action( 'wp_ajax_swtch_deploy_file', 'swtch_ajax_deploy_file' );
+
+/**
+ * Mark the deployment as successfully completed.
+ */
+function swtch_ajax_finalize_deployment() {
+
+    swtch_ajax_require_admin();
+
+    $job_id = isset( $_POST['job_id'] )
+        ? sanitize_text_field(
+            wp_unslash( $_POST['job_id'] )
+        )
+        : '';
+
+    $job = swtch_get_job( $job_id );
+
+    if ( false === $job ) {
+        wp_send_json_error(
+            [
+                'message' =>
+                    'Deployment job not found or expired.',
+            ],
+            404
+        );
+    }
+
+    if (
+        empty( $job['deployment_manifest'] ) ||
+        ! is_array( $job['deployment_manifest'] )
+    ) {
+        wp_send_json_error(
+            [
+                'message' =>
+                    'Deployment manifest is missing.',
+            ],
+            400
+        );
+    }
+
+    swtch_save_deployment_manifest(
+        $job['deployment_manifest']
+    );
+
+    wp_send_json_success( [
+        'message' => 'Deployment manifest saved.',
+    ] );
+}
+
+add_action(
+    'wp_ajax_swtch_finalize_deployment',
+    'swtch_ajax_finalize_deployment'
+);
+/**
+ * Delete exactly one stale file from the previous deployment.
+ */
+function swtch_ajax_delete_stale_file() {
+
+    swtch_ajax_require_admin();
+
+    $job_id = isset( $_POST['job_id'] )
+        ? sanitize_text_field(
+            wp_unslash( $_POST['job_id'] )
+        )
+        : '';
+
+    $index = isset( $_POST['index'] )
+        ? absint( $_POST['index'] )
+        : -1;
+
+    $password = isset( $_POST['password'] )
+        ? (string) wp_unslash( $_POST['password'] )
+        : '';
+
+    $job = swtch_get_job( $job_id );
+
+    if ( false === $job ) {
+
+        wp_send_json_error(
+            [ 'message' => 'Deployment job not found or expired.' ],
+            404
+        );
+    }
+
+    if ( ! isset( $job['stale_files'][ $index ] ) ) {
+
+        wp_send_json_error(
+            [ 'message' => 'Invalid stale-file index.' ],
+            400
+        );
+    }
+
+    $relative_path = $job['stale_files'][ $index ];
+
+    /*
+     * Defense in depth.
+     */
+    if ( swtch_is_remote_path_ignored( $relative_path ) ) {
+
+        wp_send_json_success( [
+            'index'   => $index,
+            'skipped' => true,
+            'file'    => $relative_path,
+        ] );
+    }
+
+    $result = swtch_delete_file_from_remote(
+        $relative_path,
+        $password
+    );
+
+    if ( is_wp_error( $result ) ) {
+
+        wp_send_json_error(
+            [
+                'message' => $result->get_error_message(),
+                'file'    => $relative_path,
+            ],
+            500
+        );
+    }
+
+    wp_send_json_success( [
+        'index'   => $index,
+        'deleted' => true,
+        'file'    => $relative_path,
+    ] );
+}
+
+add_action(
+    'wp_ajax_swtch_delete_stale_file',
+    'swtch_ajax_delete_stale_file'
+);

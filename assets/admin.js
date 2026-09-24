@@ -4,8 +4,12 @@
     const state = {
         jobId: null,
         pageTotal: 0,
+
         deploymentTotal: 0,
-        deploymentManifest: []
+        deploymentManifest: [],
+
+        staleTotal: 0,
+        staleFiles: []
     };
 
     function request(action, data = {}) {
@@ -88,8 +92,14 @@
 
         state.deploymentTotal = finalized.deployment_total;
         state.deploymentManifest = finalized.manifest;
+        state.staleTotal =
+            finalized.stale_total || 0;
+
+        state.staleFiles =
+            finalized.stale_files || [];
 
         log(`Deployment manifest created with ${finalized.deployment_total} file(s).`);
+        
         log(
             finalized.sitemap_created
                 ? 'sitemap.xml created.'
@@ -106,28 +116,133 @@
     }
 
     async function deployFiles() {
-        if (!state.jobId || state.deploymentTotal === 0) {
+
+        if (!state.jobId) {
             return;
         }
-        const password = document.getElementById('swtch-deployment-password')?.value || '';
-        for (let index = 0; index < state.deploymentTotal; index++) {
-            const item = state.deploymentManifest[index];
+
+        /*
+        * Deployment password is deliberately not stored
+        * in WordPress. Read it from the admin page.
+        */
+        const password =
+            document.getElementById(
+                'swtch-deployment-password'
+            )?.value || '';
+
+        /*
+        * -------------------------------------------------
+        * STEP 1:
+        * Upload new/changed files.
+        * Unchanged files will be skipped by the server.
+        * -------------------------------------------------
+        */
+        for (
+            let index = 0;
+            index < state.deploymentTotal;
+            index++
+        ) {
+
+            const item =
+                state.deploymentManifest[index];
 
             try {
-                const data = await request('swtch_deploy_file', {
-                    job_id: state.jobId,
-                    index: String(index),
-                    password: password
-                });
 
-                log(`${data.skipped ? 'Skipped' : 'Uploaded'}: ${data.file}`, data.skipped ? 'info' : 'success');
+                const data = await request(
+                    'swtch_deploy_file',
+                    {
+                        job_id: state.jobId,
+                        index: String(index),
+                        password: password
+                    }
+                );
+
+                log(
+                    `${data.skipped ? 'Skipped' : 'Uploaded'}: ${data.file}`,
+                    data.skipped
+                        ? 'info'
+                        : 'success'
+                );
+
             } catch (error) {
-                log(`Deployment stopped at ${item.relative_path}: ${error.message}`, 'error');
+
+                log(
+                    `Deployment stopped at ${item.relative_path}: ${error.message}`,
+                    'error'
+                );
+
                 throw error;
             }
 
-            setProgress('swtch-deploy-progress', index + 1, state.deploymentTotal);
+            setProgress(
+                'swtch-deploy-progress',
+                index + 1,
+                state.deploymentTotal
+            );
         }
+
+
+        /*
+        * -------------------------------------------------
+        * STEP 2:
+        * Remove files that existed in the previous
+        * successful deployment but not in this one.
+        * -------------------------------------------------
+        */
+        for (
+            let index = 0;
+            index < state.staleTotal;
+            index++
+        ) {
+
+            const item =
+                state.staleFiles[index];
+
+            try {
+
+                const data = await request(
+                    'swtch_delete_stale_file',
+                    {
+                        job_id: state.jobId,
+                        index: String(index),
+                        password: password
+                    }
+                );
+
+                log(
+                    `${data.skipped ? 'Protected' : 'Deleted'}: ${data.file}`,
+                    data.skipped
+                        ? 'info'
+                        : 'success'
+                );
+
+            } catch (error) {
+
+                log(
+                    `Cleanup stopped at ${item}: ${error.message}`,
+                    'error'
+                );
+
+                throw error;
+            }
+        }
+
+
+        /*
+        * -------------------------------------------------
+        * STEP 3:
+        * Everything succeeded.
+        *
+        * The current manifest can now safely become
+        * the "last successful deployment" manifest.
+        * -------------------------------------------------
+        */
+        await request(
+            'swtch_finalize_deployment',
+            {
+                job_id: state.jobId
+            }
+        );
     }
 
     document.addEventListener('DOMContentLoaded', function () {

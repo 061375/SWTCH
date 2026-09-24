@@ -52,6 +52,7 @@ function swtch_build_deployment_manifest() {
             'relative_path' => $relative_path,
             'absolute_path' => $absolute_path,
             'size'          => (int) $file->getSize(),
+            'hash'          => hash_file( 'sha256', $absolute_path ),
         ];
     }
 
@@ -63,6 +64,55 @@ function swtch_build_deployment_manifest() {
     );
 
     return array_values( $manifest );
+}
+/**
+ * Get the manifest from the last successful deployment.
+ */
+function swtch_get_last_deployment_manifest() {
+
+    $manifest = get_option(
+        'swtch_last_deployment_manifest',
+        []
+    );
+
+    return is_array( $manifest )
+        ? $manifest
+        : [];
+}
+
+
+/**
+ * Store the current manifest as the last successful deployment.
+ */
+function swtch_save_deployment_manifest( $manifest ) {
+
+    $stored_manifest = [];
+
+    foreach ( $manifest as $item ) {
+
+        if (
+            empty( $item['relative_path'] ) ||
+            empty( $item['hash'] )
+        ) {
+            continue;
+        }
+
+        $stored_manifest[ $item['relative_path'] ] = [
+            'hash' => $item['hash'],
+            'size' => isset( $item['size'] )
+                ? (int) $item['size']
+                : 0,
+        ];
+    }
+
+    update_option(
+        'swtch_last_deployment_manifest',
+        [
+            'deployed_at' => current_time( 'mysql' ),
+            'files'       => $stored_manifest,
+        ],
+        false
+    );
 }
 
 /**
@@ -598,6 +648,297 @@ function swtch_sftp_ensure_directory(
                 'Could not create remote directory: ' . $current
             );
         }
+    }
+
+    return true;
+}
+/**
+ * Determine whether a manifest item has changed
+ * since the last successful deployment.
+ */
+function swtch_deployment_file_changed(
+    $item,
+    $previous_manifest
+) {
+
+    if (
+        empty( $item['relative_path'] ) ||
+        empty( $item['hash'] )
+    ) {
+        return true;
+    }
+
+    $previous_files = isset( $previous_manifest['files'] )
+        && is_array( $previous_manifest['files'] )
+            ? $previous_manifest['files']
+            : [];
+
+    $relative_path = $item['relative_path'];
+
+    /*
+     * New file.
+     */
+    if ( ! isset( $previous_files[ $relative_path ] ) ) {
+        return true;
+    }
+
+    /*
+     * Existing file whose contents changed.
+     */
+    if (
+        empty( $previous_files[ $relative_path ]['hash'] ) ||
+        ! hash_equals(
+            $previous_files[ $relative_path ]['hash'],
+            $item['hash']
+        )
+    ) {
+        return true;
+    }
+
+    /*
+     * Same path and same contents.
+     */
+    return false;
+}
+/**
+ * Return files that existed in the previous successful deployment
+ * but no longer exist in the current deployment manifest.
+ */
+function swtch_get_stale_deployment_files(
+    $current_manifest,
+    $previous_manifest
+) {
+
+    $current_paths = [];
+
+    foreach ( $current_manifest as $item ) {
+
+        if ( empty( $item['relative_path'] ) ) {
+            continue;
+        }
+
+        $current_paths[ $item['relative_path'] ] = true;
+    }
+
+    $previous_files =
+        isset( $previous_manifest['files'] ) &&
+        is_array( $previous_manifest['files'] )
+            ? $previous_manifest['files']
+            : [];
+
+    $stale = [];
+
+    foreach ( array_keys( $previous_files ) as $relative_path ) {
+
+        if ( isset( $current_paths[ $relative_path ] ) ) {
+            continue;
+        }
+
+        /*
+         * Never allow a stale-file cleanup to bypass
+         * the remote protection rules.
+         */
+        if ( swtch_is_remote_path_ignored( $relative_path ) ) {
+            continue;
+        }
+
+        $stale[] = $relative_path;
+    }
+
+    sort( $stale );
+
+    return $stale;
+}
+/**
+ * Delete one file previously deployed by SWTCH.
+ *
+ * @return true|WP_Error
+ */
+function swtch_delete_file_from_remote(
+    $relative_path,
+    $password
+) {
+
+    if ( swtch_is_remote_path_ignored( $relative_path ) ) {
+        return new WP_Error(
+            'swtch_remote_path_ignored',
+            'Remote path is protected by an ignore rule.'
+        );
+    }
+
+    $protocol = swtch_get_deployment_protocol();
+    $host     = swtch_get_deployment_host();
+    $port     = swtch_get_deployment_port();
+    $username = swtch_get_deployment_username();
+    $base     = swtch_get_deployment_remote_path();
+
+    $relative_path = ltrim(
+        str_replace( '\\', '/', $relative_path ),
+        '/'
+    );
+
+    $base = '/' . trim(
+        str_replace( '\\', '/', $base ),
+        '/'
+    );
+
+    $remote_path =
+        '/' === $base
+            ? '/' . $relative_path
+            : $base . '/' . $relative_path;
+
+    if ( 'sftp' === $protocol ) {
+
+        return swtch_delete_file_sftp(
+            $host,
+            $port,
+            $username,
+            $password,
+            $remote_path
+        );
+    }
+
+    return swtch_delete_file_ftp(
+        $host,
+        $port,
+        $username,
+        $password,
+        $remote_path
+    );
+}
+function swtch_delete_file_ftp(
+    $host,
+    $port,
+    $username,
+    $password,
+    $remote_path
+) {
+
+    $connection = ftp_connect(
+        $host,
+        $port,
+        30
+    );
+
+    if ( false === $connection ) {
+        return new WP_Error(
+            'swtch_ftp_connection_failed',
+            'Could not connect to the FTP server.'
+        );
+    }
+
+    if ( ! ftp_login( $connection, $username, $password ) ) {
+
+        ftp_close( $connection );
+
+        return new WP_Error(
+            'swtch_ftp_login_failed',
+            'FTP login failed.'
+        );
+    }
+
+    /*
+     * Already absent is effectively success.
+     */
+    if ( -1 === @ftp_size( $connection, $remote_path ) ) {
+
+        ftp_close( $connection );
+
+        return true;
+    }
+
+    $deleted = @ftp_delete(
+        $connection,
+        $remote_path
+    );
+
+    ftp_close( $connection );
+
+    if ( ! $deleted ) {
+
+        return new WP_Error(
+            'swtch_ftp_delete_failed',
+            'Could not delete remote file: ' . $remote_path
+        );
+    }
+
+    return true;
+}
+function swtch_delete_file_sftp(
+    $host,
+    $port,
+    $username,
+    $password,
+    $remote_path
+) {
+
+    if (
+        ! function_exists( 'ssh2_connect' ) ||
+        ! function_exists( 'ssh2_auth_password' ) ||
+        ! function_exists( 'ssh2_sftp' )
+    ) {
+        return new WP_Error(
+            'swtch_sftp_unavailable',
+            'The PHP SSH2 extension is not available.'
+        );
+    }
+
+    $connection = ssh2_connect(
+        $host,
+        $port
+    );
+
+    if ( false === $connection ) {
+        return new WP_Error(
+            'swtch_sftp_connection_failed',
+            'Could not connect to the SFTP server.'
+        );
+    }
+
+    if (
+        ! ssh2_auth_password(
+            $connection,
+            $username,
+            $password
+        )
+    ) {
+        return new WP_Error(
+            'swtch_sftp_login_failed',
+            'SFTP login failed.'
+        );
+    }
+
+    $sftp = ssh2_sftp( $connection );
+
+    if ( false === $sftp ) {
+        return new WP_Error(
+            'swtch_sftp_init_failed',
+            'Could not initialize SFTP.'
+        );
+    }
+
+    $remote_uri =
+        'ssh2.sftp://' .
+        intval( $sftp ) .
+        $remote_path;
+
+    /*
+     * Already absent is success.
+     */
+    if ( ! file_exists( $remote_uri ) ) {
+        return true;
+    }
+
+    if (
+        ! ssh2_sftp_unlink(
+            $sftp,
+            $remote_path
+        )
+    ) {
+        return new WP_Error(
+            'swtch_sftp_delete_failed',
+            'Could not delete remote file: ' . $remote_path
+        );
     }
 
     return true;
