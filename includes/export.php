@@ -221,3 +221,43 @@ function swtch_rewrite_absolute_metadata_urls( $html ) {
 
     return $html;
 }
+
+/**
+ * Remove the previous static export before starting a new build.
+ */
+function swtch_clear_export_directory() {
+
+    $export_root = WP_CONTENT_DIR . '/swtch-export';
+
+    if ( ! is_dir( $export_root ) ) {
+        return true;
+    }
+
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator(
+            $export_root,
+            FilesystemIterator::SKIP_DOTS
+        ),
+        RecursiveIteratorIterator::CHILD_FIRST
+    );
+
+    foreach ( $iterator as $item ) {
+
+        $path = $item->getPathname();
+
+        if ( $item->isDir() ) {
+
+            if ( ! rmdir( $path ) ) {
+                return false;
+            }
+
+        } else {
+
+            if ( ! unlink( $path ) ) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}

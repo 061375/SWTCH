@@ -109,7 +109,10 @@
 
         const deployButton = document.getElementById('swtch-deploy');
         if (deployButton) {
-            deployButton.disabled = finalized.deployment_total === 0;
+            deployButton.disabled = 
+                finalized.deployment_total === 0
+                    &&
+                    finalized.stale_total === 0;
         }
 
         setProgress('swtch-deploy-progress', 0, finalized.deployment_total);
@@ -130,13 +133,6 @@
                 'swtch-deployment-password'
             )?.value || '';
 
-        /*
-        * -------------------------------------------------
-        * STEP 1:
-        * Upload new/changed files.
-        * Unchanged files will be skipped by the server.
-        * -------------------------------------------------
-        */
         for (
             let index = 0;
             index < state.deploymentTotal;
@@ -181,14 +177,6 @@
             );
         }
 
-
-        /*
-        * -------------------------------------------------
-        * STEP 2:
-        * Remove files that existed in the previous
-        * successful deployment but not in this one.
-        * -------------------------------------------------
-        */
         for (
             let index = 0;
             index < state.staleTotal;
@@ -227,16 +215,6 @@
             }
         }
 
-
-        /*
-        * -------------------------------------------------
-        * STEP 3:
-        * Everything succeeded.
-        *
-        * The current manifest can now safely become
-        * the "last successful deployment" manifest.
-        * -------------------------------------------------
-        */
         await request(
             'swtch_finalize_deployment',
             {

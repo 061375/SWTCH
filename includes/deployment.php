@@ -943,3 +943,4 @@ function swtch_delete_file_sftp(
 
     return true;
 }
+

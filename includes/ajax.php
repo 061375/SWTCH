@@ -70,6 +70,16 @@ function swtch_ajax_start_build() {
 
     swtch_ajax_require_admin();
 
+    if ( ! swtch_clear_export_directory() ) {
+
+        wp_send_json_error(
+            [
+                'message' => 'Could not clear the previous SWTCH export.',
+            ],
+            500
+        );
+    }
+
     $urls   = swtch_get_export_urls();
     $job_id = wp_generate_uuid4();
 
@@ -264,6 +274,7 @@ add_action(
 function swtch_ajax_deploy_file() {
 
     swtch_ajax_require_admin();
+
 
     $job_id = isset( $_POST['job_id'] )
         ? sanitize_text_field( wp_unslash( $_POST['job_id'] ) )
