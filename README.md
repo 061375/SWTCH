@@ -10,9 +10,11 @@
 # Versions
 
 ## 📅 September 22, 2026
-## ⬆️📅 September 24, 2026
-## 0.1.5
+## ⬆️📅 September 26, 2026
+## 0.1.6
 
+* ## 0.1.5/1
+*   🐱 Add warning about overwritting local login 
 * ## 0.1.4/1
 *   🐞 Stale files and assets were not being deleted on remote
 * ## 0.1.3/3

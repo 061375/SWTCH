@@ -339,9 +339,26 @@ function swtch_render_admin_page() {
         <section class="<?=$show_deploy?>">
             <h3>Test Deployment Connection</h3>
             <p>Save the deployment settings above first, then enter the password to test the connection. The password is not saved.</p>
+            <p class="warning">
+                <i>
+                    <b>
+                        WARNING! 
+                    </b>
+                    Your browser may ask you to store this password. It you decide to do so be sure to modify the user name accordingly other wise you may overwrite the stored login to Wordpress for the current on this website
+                </i>
+            </p>
             <form method="post">
                 <?php wp_nonce_field( 'swtch_test_connection', 'swtch_test_connection_nonce' ); ?>
-                <table class="form-table"><tr><th scope="row"><label for="swtch_deployment_password">Password</label></th><td><input type="password" id="swtch_deployment_password" name="swtch_deployment_password" class="regular-text" autocomplete="current-password"></td></tr></table>
+                <table class="form-table"><tr><th scope="row">
+                            <label for="swtch_deployment_password">
+                                Password
+                            </label>
+                        </th>
+                        <td>
+                            <input type="password" id="swtch_deployment_password" name="swtch_deployment_password" class="regular-text" autocomplete="current-password">
+                        </td>
+                    </tr>
+                </table>
                 <?php submit_button( 'Test Connection', 'secondary', 'swtch_test_connection' ); ?>
             </form>
 
@@ -351,6 +368,14 @@ function swtch_render_admin_page() {
             <p>
                 After a successful build, SWTCH scans the export directory and creates a deployment manifest.
                 Remote ignore rules are applied before files are queued for upload.
+            </p>
+            <p class="warning">
+                <i>
+                    <b>
+                        WARNING! 
+                    </b>
+                    Your browser may ask you to store this password. It you decide to do so be sure to modify the user name accordingly other wise you may overwrite the stored login to Wordpress for the current on this website
+                </i>
             </p>
 
             <p>
@@ -412,6 +437,9 @@ function swtch_render_admin_page() {
                 }
                 section {
                     margin-left: 15px;
+                }
+                .warning {
+                    color: red;
                 }
             </style>
         </section>
