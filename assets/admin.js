@@ -62,6 +62,41 @@
         output.scrollTop = output.scrollHeight;
     }
 
+    function copyRedirectsToClipboard() {
+        const output = document.getElementById('swtch-301');
+        const button = document.getElementById('swtch-copy-301');
+
+        if (!output) {
+            return;
+        }
+
+        const text = output.textContent.trim();
+
+        if (!text) {
+            return;
+        }
+
+        const range = document.createRange();
+        range.selectNodeContents(output);
+
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+
+        navigator.clipboard.writeText(text).then(function () {
+
+            if (button) {
+                const originalText = button.textContent;
+
+                button.textContent = 'Copied!';
+
+                setTimeout(function () {
+                    button.textContent = originalText;
+                }, 1500);
+            }
+        });
+    }
+
     async function buildPages() {
         const started = await request('swtch_start_build');
 
@@ -97,6 +132,23 @@
 
         state.staleFiles =
             finalized.stale_files || [];
+
+        const redirectOutput = document.getElementById('swtch-301');
+        const redirectCount = document.getElementById('swtch-301-count');
+        const copyRedirectButton = document.getElementById('swtch-copy-301');
+
+        if (redirectOutput) {
+            redirectOutput.textContent = finalized.redirect_block;
+        }
+
+        if (redirectCount) {
+            redirectCount.textContent =
+                `${finalized.redirect_count || 0} redirect(s) detected`;
+        }
+
+        if (copyRedirectButton) {
+            copyRedirectButton.disabled = false;
+        }
 
         log(`Deployment manifest created with ${finalized.deployment_total} file(s).`);
         
@@ -280,5 +332,27 @@
                 section.classList.toggle('hidden');
             }
         });
+
+        const redirectOutput =
+            document.getElementById('swtch-301');
+
+        const copyRedirectButton =
+            document.getElementById('swtch-copy-301');
+
+        if (redirectOutput) {
+
+            redirectOutput.addEventListener(
+                'click',
+                copyRedirectsToClipboard
+            );
+        }
+
+        if (copyRedirectButton) {
+
+            copyRedirectButton.addEventListener(
+                'click',
+                copyRedirectsToClipboard
+            );
+        }
     });
 })();

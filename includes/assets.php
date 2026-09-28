@@ -8,6 +8,13 @@ function swtch_rewrite_internal_urls( $html ) {
     $asset_base = swtch_get_asset_base();
 
     /*
+     * Remove WordPress-specific metadata that has no
+     * purpose in the static export.
+     */
+    $html = swtch_remove_wordpress_head_links(
+        $html
+    );
+    /*
      * Some metadata requires absolute URLs.
      *
      * Do this BEFORE stripping the development hostname.
@@ -717,4 +724,46 @@ function swtch_find_srcset_assets( $srcset ) {
     }
 
     return $assets;
+}
+/**
+ * Remove WordPress-specific <link> tags that are unnecessary
+ * in the exported static site.
+ */
+function swtch_remove_wordpress_head_links( $html ) {
+
+    /*
+     * RSS / Atom feeds.
+     *
+     * Examples:
+     *
+     * <link rel="alternate"
+     *       type="application/rss+xml"
+     *       href="/feed/" />
+     *
+     * <link rel="alternate"
+     *       type="application/rss+xml"
+     *       href="/comments/feed/" />
+     */
+    $html = preg_replace(
+        '/<link\b(?=[^>]*\brel=["\'][^"\']*alternate[^"\']*["\'])(?=[^>]*\btype=["\']application\/(?:rss|atom)\+xml["\'])[^>]*>\s*/i',
+        '',
+        $html
+    );
+
+    /*
+     * WordPress oEmbed links.
+     *
+     * JSON:
+     * application/json+oembed
+     *
+     * XML:
+     * text/xml+oembed
+     */
+    $html = preg_replace(
+        '/<link\b(?=[^>]*\brel=["\'][^"\']*alternate[^"\']*["\'])(?=[^>]*\btype=["\'](?:application\/json|text\/xml)\+oembed["\'])[^>]*>\s*/i',
+        '',
+        $html
+    );
+
+    return $html;
 }

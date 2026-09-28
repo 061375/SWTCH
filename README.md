@@ -10,9 +10,13 @@
 # Versions
 
 ## 📅 September 22, 2026
-## ⬆️📅 September 26, 2026
-## 0.1.6
+## ⬆️📅 September 28, 2026
+## 0.1.7
 
+* ## 0.1.6/2
+*   🐱 move admin sections to seperate folder for clarity
+* ## 0.1.6/1
+*   🐱 301 Redirect
 * ## 0.1.5/1
 *   🐱 Add warning about overwritting local login 
 * ## 0.1.4/1

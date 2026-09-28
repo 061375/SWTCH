@@ -185,6 +185,12 @@ function swtch_ajax_finalize_build() {
         swtch_export_wordpress_sitemap(
             $job['urls']
         );
+    
+    /*
+    * Refresh permalink history and generate 301 redirects.
+    */
+    $redirect_result =
+        swtch_generate_redirect_block();
 
     /*
      * Build the current deployment manifest.
@@ -238,6 +244,7 @@ function swtch_ajax_finalize_build() {
     $job['deployment_manifest'] = $manifest;
     $job['stale_files']         = $stale_files;
     $job['sitemap_result']      = $sitemap_result;
+    $job['redirect_result']     = $redirect_result;
 
     swtch_save_job(
         $job_id,
@@ -251,6 +258,9 @@ function swtch_ajax_finalize_build() {
         'pages_total'      => count( $job['urls'] ),
         'pages_failed'     => count( $failed ),
         'sitemap_created'  => false !== $sitemap_result,
+
+        'redirect_count'   => $redirect_result['count'],
+        'redirect_block'   => $redirect_result['block'],
 
         'deployment_total' => count( $manifest ),
         'manifest'         => $manifest,
