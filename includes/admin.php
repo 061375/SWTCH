@@ -113,7 +113,183 @@ function swtch_handle_settings_save() {
         return true;
 
     } // <--- END swtch_save_settings 
+    /* Handle Contact Settings. */
+    if ( isset( $_POST['swtch_save_contact_settings'] ) ) {
 
+        if (
+            ! isset( $_POST['swtch_contact_settings_nonce'] ) ||
+            ! wp_verify_nonce(
+                sanitize_text_field(
+                    wp_unslash(
+                        $_POST['swtch_contact_settings_nonce']
+                    )
+                ),
+                'swtch_save_contact_settings'
+            )
+        ) {
+            wp_die( 'Security check failed.' );
+        }
+
+        /*
+        * Enable / disable contact handler.
+        */
+        $contact_enabled =
+            isset( $_POST['swtch_contact_enabled'] )
+                ? 1
+                : 0;
+
+        /*
+        * SMTP host.
+        */
+        $smtp_host =
+            isset( $_POST['swtch_smtp_host'] )
+                ? sanitize_text_field(
+                    wp_unslash(
+                        $_POST['swtch_smtp_host']
+                    )
+                )
+                : '';
+
+        /*
+        * SMTP port.
+        */
+        $smtp_port =
+            isset( $_POST['swtch_smtp_port'] )
+                ? absint(
+                    $_POST['swtch_smtp_port']
+                )
+                : 587;
+
+        if (
+            $smtp_port < 1 ||
+            $smtp_port > 65535
+        ) {
+            $smtp_port = 587;
+        }
+
+        /*
+        * Encryption.
+        */
+        $smtp_encryption =
+            isset( $_POST['swtch_smtp_encryption'] )
+                ? sanitize_key(
+                    wp_unslash(
+                        $_POST['swtch_smtp_encryption']
+                    )
+                )
+                : 'tls';
+
+        if (
+            ! in_array(
+                $smtp_encryption,
+                [
+                    'tls',
+                    'ssl',
+                    'none',
+                ],
+                true
+            )
+        ) {
+            $smtp_encryption = 'tls';
+        }
+
+        /*
+        * SMTP username.
+        */
+        $smtp_username =
+            isset( $_POST['swtch_smtp_username'] )
+                ? sanitize_text_field(
+                    wp_unslash(
+                        $_POST['swtch_smtp_username']
+                    )
+                )
+                : '';
+
+        /*
+        * Destination email.
+        */
+        $contact_to =
+            isset( $_POST['swtch_contact_to'] )
+                ? sanitize_email(
+                    wp_unslash(
+                        $_POST['swtch_contact_to']
+                    )
+                )
+                : '';
+
+        /*
+        * Sender display name.
+        */
+        $contact_from_name =
+            isset( $_POST['swtch_contact_from_name'] )
+                ? sanitize_text_field(
+                    wp_unslash(
+                        $_POST['swtch_contact_from_name']
+                    )
+                )
+                : '';
+
+        update_option(
+            'swtch_contact_enabled',
+            $contact_enabled
+        );
+
+        update_option(
+            'swtch_smtp_host',
+            $smtp_host
+        );
+
+        update_option(
+            'swtch_smtp_port',
+            $smtp_port
+        );
+
+        update_option(
+            'swtch_smtp_encryption',
+            $smtp_encryption
+        );
+
+        update_option(
+            'swtch_smtp_username',
+            $smtp_username
+        );
+
+        update_option(
+            'swtch_contact_to',
+            $contact_to
+        );
+
+        update_option(
+            'swtch_contact_from_name',
+            $contact_from_name
+        );
+
+        /*
+        * Only overwrite the saved SMTP password
+        * when the user entered a new one.
+        */
+        if (
+            isset( $_POST['swtch_smtp_password'] ) &&
+            '' !== trim(
+                (string) wp_unslash(
+                    $_POST['swtch_smtp_password']
+                )
+            )
+        ) {
+
+            $smtp_password =
+                (string) wp_unslash(
+                    $_POST['swtch_smtp_password']
+                );
+
+            update_option(
+                'swtch_smtp_password',
+                $smtp_password
+            );
+        }
+
+        return true;
+    }
     /* Handle Deploy Static Site button. */
     if ( isset( $_POST['swtch_deploy'] ) ) {
         if ( ! isset( $_POST['swtch_deploy_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['swtch_deploy_nonce'] ) ), 'swtch_deploy_site' ) ) { wp_die( 'Security check failed.' ); }
@@ -234,6 +410,47 @@ function swtch_render_admin_page() {
     $deployment_port        = swtch_get_deployment_port();
     $deployment_username    = swtch_get_deployment_username();
     $deployment_remote_path = swtch_get_deployment_remote_path();
+    $contact_enabled =
+        (bool) get_option(
+            'swtch_contact_enabled',
+            false
+        );
+
+    $smtp_host =
+        get_option(
+            'swtch_smtp_host',
+            ''
+        );
+
+    $smtp_port =
+        get_option(
+            'swtch_smtp_port',
+            587
+        );
+
+    $smtp_encryption =
+        get_option(
+            'swtch_smtp_encryption',
+            'tls'
+        );
+
+    $smtp_username =
+        get_option(
+            'swtch_smtp_username',
+            ''
+        );
+
+    $contact_to =
+        get_option(
+            'swtch_contact_to',
+            ''
+        );
+
+    $contact_from_name =
+        get_option(
+            'swtch_contact_from_name',
+            ''
+        );
     $plugin_path = plugin_dir_path( __FILE__ );
     $show_deploy = "hidden";
 

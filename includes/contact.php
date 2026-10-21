@@ -1,0 +1,461 @@
+<?php
+
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
+
+/**
+ * Contact setting helpers.
+ */
+function swtch_contact_enabled() {
+    return (bool) get_option(
+        'swtch_contact_enabled',
+        false
+    );
+}
+
+function swtch_get_smtp_host() {
+    return (string) get_option(
+        'swtch_smtp_host',
+        ''
+    );
+}
+
+function swtch_get_smtp_port() {
+    return (int) get_option(
+        'swtch_smtp_port',
+        587
+    );
+}
+
+function swtch_get_smtp_encryption() {
+    return (string) get_option(
+        'swtch_smtp_encryption',
+        'tls'
+    );
+}
+
+function swtch_get_smtp_username() {
+    return (string) get_option(
+        'swtch_smtp_username',
+        ''
+    );
+}
+
+function swtch_get_smtp_password() {
+    return (string) get_option(
+        'swtch_smtp_password',
+        ''
+    );
+}
+
+function swtch_get_contact_to() {
+    return (string) get_option(
+        'swtch_contact_to',
+        ''
+    );
+}
+
+function swtch_get_contact_from_name() {
+    return (string) get_option(
+        'swtch_contact_from_name',
+        'Website Contact Form'
+    );
+}
+
+/**
+ * Generate the live contact handler.
+ */
+function swtch_generate_contact_handler() {
+
+    /*
+     * Contact handling has been disabled.
+     */
+    if ( ! swtch_contact_enabled() ) {
+        return true;
+    }
+
+    $dependency_result =
+        swtch_copy_contact_dependencies();
+
+    if ( is_wp_error( $dependency_result ) ) {
+        return $dependency_result;
+    }
+
+    $export_root =
+        WP_CONTENT_DIR .
+        '/swtch-export';
+
+    $handler_path =
+        $export_root .
+        '/swtch-contact-submit.php';
+
+    /*
+     * Make sure the export directory exists.
+     */
+    if ( ! wp_mkdir_p( $export_root ) ) {
+        return new WP_Error(
+            'swtch_contact_export_directory',
+            'Could not create the SWTCH export directory.'
+        );
+    }
+
+    /*
+     * Build the generated handler.
+     */
+    $config = [
+        'host'       => swtch_get_smtp_host(),
+        'port'       => swtch_get_smtp_port(),
+        'encryption' => swtch_get_smtp_encryption(),
+        'username'   => swtch_get_smtp_username(),
+        'password'   => swtch_get_smtp_password(),
+        'to'         => swtch_get_contact_to(),
+        'from_name'  => swtch_get_contact_from_name(),
+    ];
+
+    $handler =
+        swtch_build_contact_handler_php(
+            $config
+        );
+
+    if (
+        false === file_put_contents(
+            $handler_path,
+            $handler
+        )
+    ) {
+        return new WP_Error(
+            'swtch_contact_handler_write',
+            'Could not write the SWTCH contact handler.'
+        );
+    }
+
+    return true;
+}
+
+/**
+ * Copy the PHPMailer files required by the exported contact handler.
+ */
+function swtch_copy_contact_dependencies() {
+
+    $source_directory =
+        SWTCH_PLUGIN_DIR .
+        'lib/PHPMailer';
+
+    $destination_directory =
+        WP_CONTENT_DIR .
+        '/swtch-export/swtch-contact';
+
+    $files = [
+        'Exception.php',
+        'PHPMailer.php',
+        'SMTP.php',
+    ];
+
+    if ( ! wp_mkdir_p( $destination_directory ) ) {
+
+        return new WP_Error(
+            'swtch_contact_dependency_directory',
+            'Could not create the SWTCH contact dependency directory.'
+        );
+    }
+
+    foreach ( $files as $file ) {
+
+        $source =
+            $source_directory .
+            '/' .
+            $file;
+
+        $destination =
+            $destination_directory .
+            '/' .
+            $file;
+
+        if ( ! file_exists( $source ) ) {
+
+            return new WP_Error(
+                'swtch_contact_dependency_missing',
+                'Missing PHPMailer file: ' . $file
+            );
+        }
+
+        if ( ! copy( $source, $destination ) ) {
+
+            return new WP_Error(
+                'swtch_contact_dependency_copy',
+                'Could not copy PHPMailer file: ' . $file
+            );
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Build the PHP source for the exported handler.
+ */
+function swtch_build_contact_handler_php( $config ) {
+
+    /*
+     * var_export() gives us safe PHP literals
+     * for the generated configuration values.
+     */
+    $host =
+        var_export(
+            $config['host'],
+            true
+        );
+
+    $port =
+        (int) $config['port'];
+
+    $encryption =
+        var_export(
+            $config['encryption'],
+            true
+        );
+
+    $username =
+        var_export(
+            $config['username'],
+            true
+        );
+
+    $password =
+        var_export(
+            $config['password'],
+            true
+        );
+
+    $to =
+        var_export(
+            $config['to'],
+            true
+        );
+
+    $from_name =
+        var_export(
+            $config['from_name'],
+            true
+        );
+
+    return <<<PHP
+<?php
+
+/*
+ * Generated by SWTCH.
+ *
+ * This file belongs to the exported static website.
+ */
+
+header( 'Content-Type: application/json; charset=utf-8' );
+
+if (
+    ! isset( \$_SERVER['REQUEST_METHOD'] ) ||
+    'POST' !== \$_SERVER['REQUEST_METHOD']
+) {
+    http_response_code( 405 );
+
+    echo json_encode( [
+        'success' => false,
+        'message' => 'Method not allowed.',
+    ] );
+
+    exit;
+}
+
+require __DIR__ . '/swtch-contact/Exception.php';
+require __DIR__ . '/swtch-contact/PHPMailer.php';
+require __DIR__ . '/swtch-contact/SMTP.php';
+
+use PHPMailer\\PHPMailer\\Exception;
+use PHPMailer\\PHPMailer\\PHPMailer;
+use PHPMailer\\PHPMailer\\SMTP;
+
+\$smtp_host       = {$host};
+\$smtp_port       = {$port};
+\$smtp_encryption = {$encryption};
+\$smtp_username   = {$username};
+\$smtp_password   = {$password};
+\$contact_to      = {$to};
+\$from_name       = {$from_name};
+
+/*
+ * Basic required fields.
+ *
+ * For now we expect:
+ * name
+ * email
+ * message
+ */
+\$name =
+    isset( \$_POST['name'] )
+        ? trim( (string) \$_POST['name'] )
+        : '';
+
+\$email =
+    isset( \$_POST['email'] )
+        ? trim( (string) \$_POST['email'] )
+        : '';
+
+\$message =
+    isset( \$_POST['message'] )
+        ? trim( (string) \$_POST['message'] )
+        : '';
+
+if (
+    '' === \$name ||
+    '' === \$email ||
+    '' === \$message
+) {
+    http_response_code( 400 );
+
+    echo json_encode( [
+        'success' => false,
+        'message' => 'Name, email, and message are required.',
+    ] );
+
+    exit;
+}
+
+if ( ! filter_var( \$email, FILTER_VALIDATE_EMAIL ) ) {
+
+    http_response_code( 400 );
+
+    echo json_encode( [
+        'success' => false,
+        'message' => 'A valid email address is required.',
+    ] );
+
+    exit;
+}
+
+\$mail = new PHPMailer( true );
+
+try {
+
+    \$mail->isSMTP();
+
+    \$mail->Host =
+        \$smtp_host;
+
+    \$mail->SMTPAuth = true;
+
+    \$mail->Username =
+        \$smtp_username;
+
+    \$mail->Password =
+        \$smtp_password;
+
+    \$mail->Port =
+        \$smtp_port;
+
+    /*
+     * SMTP encryption.
+     */
+    if ( 'ssl' === \$smtp_encryption ) {
+
+        \$mail->SMTPSecure =
+            PHPMailer::ENCRYPTION_SMTPS;
+
+    } elseif ( 'tls' === \$smtp_encryption ) {
+
+        \$mail->SMTPSecure =
+            PHPMailer::ENCRYPTION_STARTTLS;
+
+    } else {
+
+        \$mail->SMTPAutoTLS = false;
+        \$mail->SMTPSecure  = false;
+    }
+
+    /*
+     * The SMTP account is used as the From address.
+     *
+     * The visitor's email is used as Reply-To.
+     * This is important for SPF / DMARC compatibility.
+     */
+    \$mail->setFrom(
+        \$smtp_username,
+        \$from_name
+    );
+
+    \$mail->addAddress(
+        \$contact_to
+    );
+
+    \$mail->addReplyTo(
+        \$email,
+        \$name
+    );
+
+    \$mail->isHTML( true );
+
+    \$mail->Subject =
+        'Website Contact Form';
+
+    \$safe_name =
+        htmlspecialchars(
+            \$name,
+            ENT_QUOTES,
+            'UTF-8'
+        );
+
+    \$safe_email =
+        htmlspecialchars(
+            \$email,
+            ENT_QUOTES,
+            'UTF-8'
+        );
+
+    \$safe_message =
+        nl2br(
+            htmlspecialchars(
+                \$message,
+                ENT_QUOTES,
+                'UTF-8'
+            )
+        );
+
+    \$mail->Body =
+        '<p><strong>Name:</strong> ' .
+        \$safe_name .
+        '</p>' .
+        '<p><strong>Email:</strong> ' .
+        \$safe_email .
+        '</p>' .
+        '<p><strong>Message:</strong></p>' .
+        '<p>' .
+        \$safe_message .
+        '</p>';
+
+    \$mail->AltBody =
+        "Name: " .
+        \$name .
+        "\\n" .
+        "Email: " .
+        \$email .
+        "\\n\\n" .
+        "Message:\\n" .
+        \$message;
+
+    \$mail->send();
+
+    echo json_encode( [
+        'success' => true,
+        'message' => 'Message sent.',
+    ] );
+
+} catch ( Exception \$e ) {
+
+    http_response_code( 500 );
+
+    echo json_encode( [
+        'success' => false,
+        'message' => 'Unable to send message.',
+    ] );
+}
+
+PHP;
+}

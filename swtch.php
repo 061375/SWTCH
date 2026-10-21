@@ -23,5 +23,6 @@ require_once SWTCH_PLUGIN_DIR . 'includes/export.php';
 require_once SWTCH_PLUGIN_DIR . 'includes/sitemap.php';
 require_once SWTCH_PLUGIN_DIR . 'includes/redirects.php';
 require_once SWTCH_PLUGIN_DIR . 'includes/deployment.php';
+require_once SWTCH_PLUGIN_DIR . 'includes/contact.php';
 require_once SWTCH_PLUGIN_DIR . 'includes/ajax.php';
 require_once SWTCH_PLUGIN_DIR . 'includes/admin.php';

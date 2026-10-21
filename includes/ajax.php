@@ -193,15 +193,35 @@ function swtch_ajax_finalize_build() {
         swtch_generate_redirect_block();
 
     /*
-     * Build the current deployment manifest.
-     *
-     * Each item should now contain:
-     *
-     * relative_path
-     * absolute_path
-     * size
-     * hash
-     */
+    * Generate the live contact handler.
+    *
+    * This must happen before building the deployment manifest
+    * so the generated handler is included in deployment.
+    */
+    $contact_result =
+        swtch_generate_contact_handler();
+
+    if ( is_wp_error( $contact_result ) ) {
+
+        wp_send_json_error(
+            [
+                'message' =>
+                    $contact_result->get_error_message(),
+            ],
+            500
+        );
+    }
+
+    /*
+    * Build the current deployment manifest.
+    *
+    * Each item should now contain:
+    *
+    * relative_path
+    * absolute_path
+    * size
+    * hash
+    */
     $manifest =
         swtch_build_deployment_manifest();
 
@@ -245,6 +265,7 @@ function swtch_ajax_finalize_build() {
     $job['stale_files']         = $stale_files;
     $job['sitemap_result']      = $sitemap_result;
     $job['redirect_result']     = $redirect_result;
+    $job['contact_result']      = $contact_result;
 
     swtch_save_job(
         $job_id,
@@ -267,6 +288,9 @@ function swtch_ajax_finalize_build() {
 
         'stale_total'      => count( $stale_files ),
         'stale_files'      => $stale_files,
+        'contact_created' =>
+            swtch_contact_enabled() &&
+                true === $contact_result,
     ] );
 }
 
