@@ -10,9 +10,11 @@
 # Versions
 
 ## 📅 September 22, 2026
-## ⬆️📅 October 21, 2026
-## 0.1.8
+## ⬆️📅 October 28, 2026
+## 0.2.10
 
+* ## 0.2.9/1
+*   🐞 Links to a local asset were not being converted 
 * ## 0.1.7/1
 *   🐱 Support for basic SMTP email and contact form
 * ## 0.1.6/2

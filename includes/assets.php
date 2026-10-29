@@ -473,6 +473,42 @@ function swtch_find_html_assets( $html ) {
     }
 
     /*
+     * <a href="..."> can link directly to the full-size image in a
+     * gallery, while its nested <img> only references the thumbnail.
+     *
+     * Only collect local image files, not ordinary navigation links or
+     * images hosted by other websites.
+     */
+    foreach ( $dom->getElementsByTagName( 'a' ) as $element ) {
+
+        $href = $element->getAttribute( 'href' );
+
+        if ( ! $href || wp_parse_url( $href, PHP_URL_HOST ) ) {
+            continue;
+        }
+
+        $path = wp_parse_url( $href, PHP_URL_PATH );
+
+        if (
+            ! $path ||
+            ! preg_match( '/\.(?:jpe?g|png|gif|webp|avif|svg|bmp|tiff?|heic|heif)$/i', $path )
+        ) {
+            continue;
+        }
+
+        $asset_prefix = '/' . swtch_get_asset_base() . '/';
+
+        if (
+            ! str_starts_with( $path, $asset_prefix ) &&
+            ! str_starts_with( $path, '/core/' )
+        ) {
+            continue;
+        }
+
+        $assets[] = $href;
+    }
+
+    /*
      * <img src="">
      */
     foreach ( $dom->getElementsByTagName( 'img' ) as $element ) {
