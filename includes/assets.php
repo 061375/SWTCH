@@ -604,6 +604,39 @@ function swtch_find_html_assets( $html ) {
         }
     }
 
+    /*
+     * Find assets referenced by inline style attributes.
+     * DOMDocument decodes HTML entities such as &quot; in attributes.
+     */
+    foreach ( $dom->getElementsByTagName( '*' ) as $element ) {
+
+        if ( ! $element->hasAttribute( 'style' ) ) {
+            continue;
+        }
+
+        $css = $element->getAttribute( 'style' );
+
+        if ( '' === trim( $css ) ) {
+            continue;
+        }
+
+        $assets = array_merge(
+            $assets,
+            swtch_find_css_assets( $css )
+        );
+    }
+
+    /*
+     * Find assets referenced by embedded stylesheets.
+     */
+    foreach ( $dom->getElementsByTagName( 'style' ) as $element ) {
+
+        $assets = array_merge(
+            $assets,
+            swtch_find_css_assets( $element->textContent )
+        );
+    }
+
     return array_unique( $assets );
 }
 /**

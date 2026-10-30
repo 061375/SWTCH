@@ -10,9 +10,11 @@
 # Versions
 
 ## 📅 September 22, 2026
-## ⬆️📅 October 28, 2026
-## 0.2.10
+## ⬆️📅 October 30, 2026
+## 0.2.11
 
+* ## 0.2.10/1
+*   🐞 Inline styles were not accounted for
 * ## 0.2.9/1
 *   🐞 Links to a local asset were not being converted 
 * ## 0.1.7/1
