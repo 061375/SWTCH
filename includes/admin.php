@@ -47,7 +47,7 @@ add_action( 'admin_enqueue_scripts', 'swtch_admin_assets' );
 /**
  * Save settings before rendering the page.
  */
-function swtch_handle_settings_save() {
+function swtch_handle_settings_save( &$connection_result = null ) {
 
     if ( isset( $_POST['swtch_save_settings'] ) ) {
        
@@ -304,8 +304,6 @@ function swtch_handle_settings_save() {
         if ( ! isset( $_POST['swtch_test_connection_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['swtch_test_connection_nonce'] ) ), 'swtch_test_connection' ) ) { wp_die( 'Security check failed.' ); }
         $password = isset( $_POST['swtch_deployment_password'] ) ? (string) wp_unslash( $_POST['swtch_deployment_password'] ) : '';
         $connection_result = swtch_test_deployment_connection( swtch_get_deployment_protocol(), swtch_get_deployment_host(), swtch_get_deployment_port(), swtch_get_deployment_username(), $password, swtch_get_deployment_remote_path() );
-        $notice_class = $connection_result['success'] ? 'notice-success' : 'notice-error';
-        echo '<div class="notice ' . esc_attr( $notice_class ) . ' is-dismissible"><p>' . esc_html( $connection_result['message'] ) . '</p></div>';
     }
 
     /*
@@ -403,7 +401,8 @@ function swtch_render_admin_page() {
         return;
     }
 
-    $settings_saved = swtch_handle_settings_save();
+    $connection_result = null;
+    $settings_saved = swtch_handle_settings_save( $connection_result );
     $live_site_url  = swtch_get_live_site_url();
     $deployment_protocol    = swtch_get_deployment_protocol();
     $deployment_host        = swtch_get_deployment_host();
@@ -471,6 +470,13 @@ function swtch_render_admin_page() {
         <?php if ( $settings_saved ) : ?>
             <div class="notice notice-success is-dismissible">
                 <p>SWTCH settings saved.</p>
+            </div>
+        <?php endif; ?>
+
+        <?php if ( null !== $connection_result ) : ?>
+            <!-- Keep this notice inline so WordPress does not move it into Build Site. -->
+            <div class="notice inline <?php echo esc_attr( $connection_result['success'] ? 'notice-success' : 'notice-error' ); ?> is-dismissible">
+                <p><?php echo esc_html( $connection_result['message'] ); ?></p>
             </div>
         <?php endif; ?>
 

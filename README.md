@@ -11,8 +11,10 @@
 
 ## 📅 September 22, 2026
 ## ⬆️📅 October 30, 2026
-## 0.2.11
+## 0.2.12
 
+* ## 0.2.11/1
+*   🐱 Moved notifications to the top of the settings area 
 * ## 0.2.10/1
 *   🐞 Inline styles were not accounted for
 * ## 0.2.9/1
