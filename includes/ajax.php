@@ -25,6 +25,55 @@ function swtch_get_export_urls() {
         }
     }
 
+    /*
+     * Taxonomy archives are virtual pages, so get_posts() cannot discover them.
+     * Query each archive to include child-category posts in its page count.
+     */
+    $terms = get_terms( [
+        'taxonomy' => [ 'category', 'post_tag' ],
+        'hide_empty' => true,
+    ] );
+
+    if ( ! is_wp_error( $terms ) ) {
+        global $wp_rewrite;
+
+        foreach ( $terms as $term ) {
+            $archive_url = get_term_link( $term );
+            if ( is_wp_error( $archive_url ) ) {
+                continue;
+            }
+
+            $archive_query = new WP_Query( [
+                'post_status' => 'publish',
+                'posts_per_page' => max( 1, (int) get_option( 'posts_per_page', 10 ) ),
+                'paged' => 1,
+                'fields' => 'ids',
+                'ignore_sticky_posts' => true,
+                'no_found_rows' => false,
+                'tax_query' => [
+                    [
+                        'taxonomy' => $term->taxonomy,
+                        'field' => 'term_id',
+                        'terms' => [ (int) $term->term_id ],
+                        'include_children' => 'category' === $term->taxonomy,
+                    ],
+                ],
+            ] );
+
+            $urls[] = $archive_url;
+            for ( $page = 2; $page <= (int) $archive_query->max_num_pages; $page++ ) {
+                if ( $wp_rewrite->using_permalinks() ) {
+                    $urls[] = user_trailingslashit(
+                        trailingslashit( $archive_url ) . $wp_rewrite->pagination_base . '/' . $page,
+                        'paged'
+                    );
+                } else {
+                    $urls[] = add_query_arg( 'paged', $page, $archive_url );
+                }
+            }
+        }
+    }
+
     return array_values( array_unique( $urls ) );
 }
 

@@ -10,9 +10,11 @@
 # Versions
 
 ## 📅 September 22, 2026
-## ⬆️📅 October 30, 2026
-## 0.2.12
+## ⬆️📅 November 1, 2026
+## 0.2.13
 
+* ## 0.2.12/1
+*   🐱 Include categories, tags and pagination
 * ## 0.2.11/1
 *   🐱 Moved notifications to the top of the settings area 
 * ## 0.2.10/1
