@@ -76,6 +76,15 @@ function swtch_generate_static_page( $url ) {
     */
     swtch_process_html_assets( $html );
 
+    $warnings = [];
+    $optimized = swtch_bundle_javascript( $html );
+    if ( is_wp_error( $optimized ) ) {
+        // Optimization is optional: always retain the complete original page.
+        $warnings[] = $optimized->get_error_message() . ' Original scripts retained.';
+    } else {
+        $html = $optimized;
+    }
+
     /*
      * Determine where this page should be saved.
      */
@@ -110,6 +119,7 @@ function swtch_generate_static_page( $url ) {
     return [
         'success' => true,
         'message' => $file_path,
+        'warnings' => $warnings,
     ];
 }
 

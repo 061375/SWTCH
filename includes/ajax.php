@@ -9,6 +9,34 @@ function swtch_get_export_urls() {
 
     $urls = [ home_url( '/' ) ];
 
+    // Posts indexes are virtual pages, absent from get_posts() permalinks.
+    // Include the homepage blog or the separately configured posts page.
+    global $wp_rewrite;
+    $posts_page_id = (int) get_option( 'page_for_posts' );
+    $blog_url = 'posts' === get_option( 'show_on_front' )
+        ? home_url( '/' )
+        : ( $posts_page_id ? get_permalink( $posts_page_id ) : false );
+
+    if ( $blog_url ) {
+        $blog_query = new WP_Query( [
+            'post_type' => 'post',
+            'post_status' => 'publish',
+            'posts_per_page' => max( 1, (int) get_option( 'posts_per_page', 10 ) ),
+            'paged' => 1,
+            'ignore_sticky_posts' => true,
+            'no_found_rows' => false,
+        ] );
+        $urls[] = $blog_url;
+        for ( $page = 2; $page <= (int) $blog_query->max_num_pages; $page++ ) {
+            $urls[] = $wp_rewrite->using_permalinks()
+                ? user_trailingslashit(
+                    trailingslashit( $blog_url ) . $wp_rewrite->pagination_base . '/' . $page,
+                    'paged'
+                )
+                : add_query_arg( 'paged', $page, $blog_url );
+        }
+    }
+
     $posts = get_posts( [
         'post_type'      => [ 'page', 'post' ],
         'post_status'    => 'publish',
@@ -171,14 +199,30 @@ function swtch_ajax_build_page() {
         wp_send_json_error( [ 'message' => 'Build job not found or expired.' ], 404 );
     }
 
+    if ( ! empty( $job['build_error'] ) ) {
+        wp_send_json_error( [ 'message' => $job['build_error'] ], 409 );
+    }
+
     if ( ! isset( $job['urls'][ $index ] ) ) {
         wp_send_json_error( [ 'message' => 'Invalid build manifest index.' ], 400 );
     }
 
     $url    = $job['urls'][ $index ];
-    $result = swtch_generate_static_page( $url );
+    try {
+        $result = swtch_generate_static_page( $url );
+    } catch ( Throwable $error ) {
+        $result = [ 'success' => false, 'message' => $error->getMessage() ];
+    }
 
     $job['page_results'][ $index ] = $result;
+    if ( empty( $result['success'] ) ) {
+        $job['build_error'] = 'Failed: ' . $url . ' — ' . ( $result['message'] ?? 'Page generation failed.' );
+        $job['build_ready'] = false;
+        $job['deployment_manifest'] = [];
+        $job['stale_files'] = [];
+        swtch_save_job( $job_id, $job );
+        wp_send_json_error( [ 'message' => $job['build_error'] ], 500 );
+    }
     swtch_save_job( $job_id, $job );
 
     wp_send_json_success( [
@@ -227,6 +271,15 @@ function swtch_ajax_finalize_build() {
         }
     );
 
+    $valid = swtch_validate_build_pages( $job );
+    if ( is_wp_error( $valid ) ) {
+        $job['build_ready'] = false;
+        $job['deployment_manifest'] = [];
+        $job['stale_files'] = [];
+        swtch_save_job( $job_id, $job );
+        wp_send_json_error( [ 'message' => $valid->get_error_message() ], 409 );
+    }
+
     /*
      * Generate sitemap.xml.
      */
@@ -234,7 +287,16 @@ function swtch_ajax_finalize_build() {
         swtch_export_wordpress_sitemap(
             $job['urls']
         );
-    
+
+    if ( false === $sitemap_result ) {
+        $job['build_error'] = 'Could not create sitemap.xml.';
+        $job['build_ready'] = false;
+        $job['deployment_manifest'] = [];
+        $job['stale_files'] = [];
+        swtch_save_job( $job_id, $job );
+        wp_send_json_error( [ 'message' => $job['build_error'] ], 500 );
+    }
+
     /*
     * Refresh permalink history and generate 301 redirects.
     */
@@ -310,6 +372,9 @@ function swtch_ajax_finalize_build() {
      * Do NOT update the permanent deployment manifest yet.
      * That happens only after deployment completes successfully.
      */
+    $job['build_ready'] = true;
+    $job['uploaded_files'] = [];
+    $job['deleted_files'] = [];
     $job['deployment_manifest'] = $manifest;
     $job['stale_files']         = $stale_files;
     $job['sitemap_result']      = $sitemap_result;
@@ -377,6 +442,8 @@ function swtch_ajax_deploy_file() {
         wp_send_json_error( [ 'message' => 'Deployment job not found or expired.' ], 404 );
     }
 
+    swtch_ajax_require_valid_deployment( $job, false );
+
     if ( ! isset( $job['deployment_manifest'][ $index ] ) ) {
         wp_send_json_error( [ 'message' => 'Invalid deployment manifest index.' ], 400 );
     }
@@ -388,6 +455,8 @@ function swtch_ajax_deploy_file() {
         false === $item['changed']
     ) {
 
+        $job['uploaded_files'][ $index ] = true;
+        swtch_save_job( $job_id, $job );
         wp_send_json_success( [
             'index'   => $index,
             'skipped' => true,
@@ -398,6 +467,8 @@ function swtch_ajax_deploy_file() {
 
     // Defense in depth: enforce ignore rules again at upload time.
     if ( swtch_is_remote_path_ignored( $item['relative_path'] ) ) {
+        $job['uploaded_files'][ $index ] = true;
+        swtch_save_job( $job_id, $job );
         wp_send_json_success( [
             'index'   => $index,
             'skipped' => true,
@@ -425,6 +496,9 @@ function swtch_ajax_deploy_file() {
             'file'    => $item['relative_path'],
         ], 500 );
     }
+
+    $job['uploaded_files'][ $index ] = true;
+    swtch_save_job( $job_id, $job );
 
     wp_send_json_success( [
         'index'   => $index,
@@ -460,6 +534,8 @@ function swtch_ajax_finalize_deployment() {
         );
     }
 
+    swtch_ajax_require_valid_deployment( $job, true );
+
     if (
         empty( $job['deployment_manifest'] ) ||
         ! is_array( $job['deployment_manifest'] )
@@ -471,6 +547,12 @@ function swtch_ajax_finalize_deployment() {
             ],
             400
         );
+    }
+
+    foreach ( ( $job['stale_files'] ?? [] ) as $index => $path ) {
+        if ( empty( $job['deleted_files'][ $index ] ) ) {
+            wp_send_json_error( [ 'message' => 'Remote cleanup has not completed.' ], 409 );
+        }
     }
 
     swtch_save_deployment_manifest(
@@ -517,6 +599,8 @@ function swtch_ajax_delete_stale_file() {
         );
     }
 
+    swtch_ajax_require_valid_deployment( $job, true );
+
     if ( ! isset( $job['stale_files'][ $index ] ) ) {
 
         wp_send_json_error(
@@ -532,6 +616,8 @@ function swtch_ajax_delete_stale_file() {
      */
     if ( swtch_is_remote_path_ignored( $relative_path ) ) {
 
+        $job['deleted_files'][ $index ] = true;
+        swtch_save_job( $job_id, $job );
         wp_send_json_success( [
             'index'   => $index,
             'skipped' => true,
@@ -554,6 +640,9 @@ function swtch_ajax_delete_stale_file() {
             500
         );
     }
+
+    $job['deleted_files'][ $index ] = true;
+    swtch_save_job( $job_id, $job );
 
     wp_send_json_success( [
         'index'   => $index,

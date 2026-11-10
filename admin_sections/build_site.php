@@ -11,6 +11,8 @@
             </button>
         </p>
 
+        <div id="swtch-build-error" class="notice notice-error inline" role="alert" hidden></div>
+
         <div style="max-width:760px;margin:14px 0 24px;">
             <strong>Build progress</strong><br>
             <progress id="swtch-build-progress" value="0" max="100" style="width:100%;height:22px;"></progress>

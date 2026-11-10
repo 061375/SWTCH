@@ -4,6 +4,11 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+/** JavaScript optimization is opt-in; ordinary builds need only PHP. */
+function swtch_javascript_optimization_enabled() {
+    return '1' === (string) get_option( 'swtch_optimize_javascript', 0 );
+}
+
 function swtch_get_asset_base() {
 
     $asset_base = get_option(

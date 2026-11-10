@@ -29,7 +29,7 @@ function swtch_admin_assets( $hook_suffix ) {
         'swtch-admin',
         plugin_dir_url( SWTCH_PLUGIN_FILE ) . 'assets/admin.js',
         [],
-        '0.2.0',
+        '0.2.17',
         true
     );
 
@@ -73,6 +73,10 @@ function swtch_handle_settings_save( &$connection_result = null ) {
         }
 
         update_option( 'swtch_live_site_url', $live_site_url );
+        update_option(
+            'swtch_optimize_javascript',
+            isset( $_POST['swtch_optimize_javascript'] ) && '1' === $_POST['swtch_optimize_javascript'] ? 1 : 0
+        );
 
         $remote_ignore_paths = '';
 

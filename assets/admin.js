@@ -3,6 +3,7 @@
 
     const state = {
         jobId: null,
+        buildReady: false,
         pageTotal: 0,
 
         deploymentTotal: 0,
@@ -97,7 +98,21 @@
         });
     }
 
+    function clearDeployment() {
+        state.buildReady = false;
+        state.jobId = null;
+        state.deploymentTotal = 0;
+        state.deploymentManifest = [];
+        state.staleTotal = 0;
+        state.staleFiles = [];
+        const deployButton = document.getElementById('swtch-deploy');
+        if (deployButton) deployButton.disabled = true;
+    }
+
     async function buildPages() {
+        clearDeployment();
+        const errorNotice = document.getElementById('swtch-build-error');
+        if (errorNotice) { errorNotice.hidden = true; errorNotice.textContent = ''; }
         const started = await request('swtch_start_build');
 
         state.jobId = started.job_id;
@@ -112,11 +127,18 @@
                 index: String(index)
             });
 
-            const ok = !!data.result.success;
+            if (!data.result?.success) {
+                throw new Error(`Failed: ${data.url} — ${data.result?.message || 'Page generation failed.'}`);
+            }
+            const ok = true;
             log(
                 `${ok ? 'Generated' : 'Failed'}: ${data.url}${ok ? '' : ' — ' + data.result.message}`,
                 ok ? 'success' : 'error'
             );
+
+            for (const warning of data.result.warnings || []) {
+                log(`Warning: ${data.url} — ${warning}`, 'error');
+            }
 
             setProgress('swtch-build-progress', index + 1, started.total);
         }
@@ -125,6 +147,10 @@
             job_id: state.jobId
         });
 
+        if (finalized.pages_failed || !finalized.sitemap_created) {
+            throw new Error('Build validation failed. Check the page results and sitemap.');
+        }
+        state.buildReady = true;
         state.deploymentTotal = finalized.deployment_total;
         state.deploymentManifest = finalized.manifest;
         state.staleTotal =
@@ -172,7 +198,7 @@
 
     async function deployFiles() {
 
-        if (!state.jobId) {
+        if (!state.jobId || !state.buildReady) {
             return;
         }
 
@@ -291,7 +317,14 @@
                     await buildPages();
                     log('Build complete.', 'success');
                 } catch (error) {
-                    log(error.message, 'error');
+                    clearDeployment();
+                    const message = `Build stopped: ${error.message} Deployment is disabled. Fix the error and run Build Static Site again.`;
+                    log(message, 'error');
+                    const errorNotice = document.getElementById('swtch-build-error');
+                    if (errorNotice) {
+                        errorNotice.textContent = message;
+                        errorNotice.hidden = false;
+                    }
                 } finally {
                     buildButton.disabled = false;
                 }
@@ -308,7 +341,7 @@
                 } catch (error) {
                     // The detailed error was already logged at the failing file.
                 } finally {
-                    deployButton.disabled = false;
+                    deployButton.disabled = !state.buildReady;
                 }
             });
         }

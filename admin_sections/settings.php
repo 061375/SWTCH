@@ -6,6 +6,20 @@
 
                 <table class="form-table">
                     <tr>
+                        <th scope="row">JavaScript Optimization</th>
+                        <td>
+                            <label for="swtch_optimize_javascript">
+                                <input type="checkbox" id="swtch_optimize_javascript" name="swtch_optimize_javascript" value="1" <?php checked( swtch_javascript_optimization_enabled() ); ?>>
+                                Combine and minify compatible JavaScript files during builds
+                            </label>
+                            <p class="description">
+                                Optional; disabled by default. Requires Node.js, the bundled Terser dependencies, and permission for PHP to run Node.js on the build server. Python is not required.
+                                Scripts with different loading requirements remain separate. If optimization fails, original scripts are retained with a build warning.
+                                Leave unchecked to export original scripts without Node.js or Terser.
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
                         <th scope="row">
                             <label for="swtch_live_site_url">Live Site URL</label>
                         </th>
