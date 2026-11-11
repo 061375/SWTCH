@@ -3,7 +3,7 @@
  * Plugin Name: SWTCH
  * Plugin URI:
  * Description: Static WordPress To Common HTML
- * Version: 0.2.18
+ * Version: 0.2.19
  * Author: Jeremy Heminger
  * License: GPL-2.0-or-later
  * Text Domain: swtch

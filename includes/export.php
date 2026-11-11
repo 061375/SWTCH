@@ -145,7 +145,51 @@ function swtch_convert_to_live_url( $url ) {
         $url
     );
 }
+function swtch_rewrite_json_ld_urls( $html ) {
+    $live_url = swtch_get_live_site_url();
+    if ( '' === $live_url ) {
+        return $html;
+    }
+
+    $local_base = preg_replace( '~^https?://~i', '', untrailingslashit( home_url() ) );
+    $live_base = preg_replace( '~^https?://~i', '', $live_url );
+    $live_host = preg_replace( '/^www\./i', '', $live_base );
+    $url_pattern = '~^https?://(?:' . preg_quote( $local_base, '~' ) . '|(?:www\.)?' .
+        preg_quote( $live_host, '~' ) . ')(?=[/?#]|$)~i';
+
+    $rewrite = function ( &$value ) use ( &$rewrite, $url_pattern, $live_url ) {
+        if ( is_array( $value ) || is_object( $value ) ) {
+            foreach ( $value as &$child ) {
+                $rewrite( $child );
+            }
+        } elseif ( is_string( $value ) && preg_match( $url_pattern, $value, $match ) ) {
+            $value = $live_url . substr( $value, strlen( $match[0] ) );
+        }
+    };
+
+    return preg_replace_callback(
+        '~(<script\b[^>]*>)(.*?)(</script\s*>)~is',
+        function ( $matches ) use ( $rewrite ) {
+            if ( ! preg_match( '~\s+type\s*=\s*(?:"application/ld\+json"|\'application/ld\+json\'|application/ld\+json(?=\s|>))~i', $matches[1] ) ) {
+                return $matches[0];
+            }
+
+            $data = json_decode( $matches[2] );
+            if ( JSON_ERROR_NONE !== json_last_error() ) {
+                return $matches[0];
+            }
+
+            $rewrite( $data );
+            $json = wp_json_encode( $data, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG );
+            return false === $json ? $matches[0] : $matches[1] . $json . $matches[3];
+        },
+        $html
+    );
+}
+
 function swtch_rewrite_absolute_metadata_urls( $html ) {
+
+    $html = swtch_rewrite_json_ld_urls( $html );
 
     /*
      * <link rel="canonical" href="...">

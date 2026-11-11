@@ -10,9 +10,13 @@
 # Versions
 
 ## 📅 September 22, 2026
-## ⬆️📅 November 10, 2026
-## 0.2.18
+## ⬆️📅 November 11, 2026
+## 0.2.19
 
+* ## 0.2.18/2
+*   🐞 SON-LD schema URLs were not being updated from http to https
+* ## 0.2.18/1
+*   🐞 Yoast JSON-LD schema URLs were not being updated from local
 * ## 0.2.17/3
 *   🐞 the categories and tags were not rendering
 * ## 0.2.17/2
